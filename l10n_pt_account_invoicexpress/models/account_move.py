@@ -131,7 +131,7 @@ class AccountMove(models.Model):
                     line.price_unit,
                     line.company_id.currency_id,
                     line.company_id,
-                    date_today
+                    date_today,
                 )
             items.append(
                 {
