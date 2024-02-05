@@ -131,7 +131,7 @@ class AccountMove(models.Model):
                     line.price_unit,
                     line.company_id.currency_id,
                     line.company_id,
-                    date_today,
+                    line.move_id.invoice_date,
                 )
             items.append(
                 {
