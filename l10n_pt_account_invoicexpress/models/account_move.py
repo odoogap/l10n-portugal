@@ -410,24 +410,34 @@ class AccountMove(models.Model):
                 raise exceptions.UserError(
                     _("Invoice is missing the InvoiceXpress document type!")
                 )
-            response = InvoiceXpress.call(
-                invoice.company_id,
-                "{}s/{}/change-state.json".format(doctype, invoice.invoicexpress_id),
-                "PUT",
-                payload={"invoice": {"state": "settled"}},
-                raise_errors=True,
-            ).json()
-            values = response.get(doctype)
-            seqnum = values and values.get("inverted_sequence_number")
-            if not seqnum:
-                raise exceptions.UserError(
-                    _(
-                        "Something went wrong: the InvoiceXpress response"
-                        " is missing a sequence number."
-                    )
-                )
-            msg = _("InvoiceXpress record has been modified to Paid.")
-            self.message_post(body=msg)
+            try:
+                with self.env.cr.savepoint():
+                    response = InvoiceXpress.call(
+                        invoice.company_id,
+                        "{}s/{}/change-state.json".format(doctype, invoice.invoicexpress_id),
+                        "PUT",
+                        payload={"invoice": {"state": "settled"}},
+                        raise_errors=True,
+                    ).json()
+                    values = response.get(doctype)
+                    seqnum = values and values.get("inverted_sequence_number")
+                    if not seqnum:
+                        raise exceptions.UserError(
+                            _(
+                                "Something went wrong: the InvoiceXpress response"
+                                " is missing a sequence number."
+                            )
+                        )
+                    msg = _("InvoiceXpress record has been modified to Paid.")
+                    self.message_post(body=msg)
+
+            except exceptions.ValidationError as e:
+                if e.name == "Error running API request (422 Unprocessable Entity):\n{'errors': [{'error': 'Change event error'}]}":
+                    # In case someone else marked the invoice as paid in InvoiceXpress
+                    msg = _("Change event error: InvoiceXpress record was already booked as Paid.")
+                    self.message_post(body=msg)
+                else:
+                    raise e
 
     def action_register_payment(self):
         for invoice in self:
